@@ -24,6 +24,11 @@ context: |
   log of access and changes to patient data; role-based access control.
   Testing: Go tests against real Postgres via testcontainers-go; RLS isolation
   must have tests.
+  Delivery: MVP first. Ship a thin, working first iteration; features do not need
+  to be fully implemented before release. Scope each change to the smallest useful
+  slice and list deferred work as explicit follow-ups rather than building it now.
+  Non-negotiables still apply to whatever ships: tenant isolation (RLS),
+  audit logging of patient data, and RBAC.
 
 rules:
   tasks:
