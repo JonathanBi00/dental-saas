@@ -1,0 +1,703 @@
+openapi: 3.0.3
+info:
+  title: Dental SaaS API
+  version: 1.0.0
+  description: |
+    Practice management API. All endpoints are tenant-scoped to the session's active
+    organisation unless marked public.
+
+    Conventions:
+    - Errors use Problem Details (`application/problem+json`); 422 responses list invalid fields.
+    - List endpoints use cursor pagination (`limit` default 50, max 200; follow `next_cursor`).
+    - Tenant data lists accept `updated_since` for delta sync; use the returned `sync_until`
+      as the next `updated_since`.
+    - Every response carries `X-Request-Id`.
+    - Timestamps are RFC 3339, returned in UTC.
+servers:
+  - url: /api/v1
+security:
+  - cookieAuth: []
+
+tags:
+  - name: auth
+  - name: locations
+  - name: members
+  - name: invitations
+  - name: audit
+
+paths:
+  # ---------------------------------------------------------------- auth
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Signed in. Sets the session cookie.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Sign out and revoke the current session
+      responses:
+        '204':
+          description: Signed out. Clears the session cookie.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/session:
+    get:
+      operationId: getSession
+      tags: [auth]
+      summary: Current user, memberships, active organisation/location and permissions
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/session/organisation:
+    post:
+      operationId: switchOrganisation
+      tags: [auth]
+      summary: Change the session's active organisation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SwitchOrganisationRequest' }
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/session/location:
+    post:
+      operationId: switchLocation
+      tags: [auth]
+      summary: Change the session's active location (null = all accessible locations)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SwitchLocationRequest' }
+      responses:
+        '200':
+          description: Updated session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/password-reset/request:
+    post:
+      operationId: requestPasswordReset
+      tags: [auth]
+      summary: Email a password reset link (same response whether or not the account exists)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetRequest' }
+      responses:
+        '202': { description: Accepted }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/password-reset/complete:
+    post:
+      operationId: completePasswordReset
+      tags: [auth]
+      summary: Set a new password using a reset token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetComplete' }
+      responses:
+        '204': { description: Password changed; all sessions revoked }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/invitations/{token}:
+    get:
+      operationId: getInvitationPreview
+      tags: [auth]
+      summary: Look up an invitation by its token
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Invitation details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationPreview' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /auth/invitations/{token}/accept:
+    post:
+      operationId: acceptInvitation
+      tags: [auth]
+      summary: Accept an invitation, creating the account if needed, and sign in
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcceptInvitationRequest' }
+      responses:
+        '200':
+          description: Accepted and signed in. Sets the session cookie.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetCookie' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionInfo' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ----------------------------------------------------------- locations
+  /locations:
+    get:
+      operationId: listLocations
+      tags: [locations]
+      summary: List locations the current member can access
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/UpdatedSince'
+        - name: include_archived
+          in: query
+          description: Include archived locations (ignored with updated_since, which always includes them)
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: A page of locations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocationList' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createLocation
+      tags: [locations]
+      summary: Create a location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocationCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /locations/{locationId}:
+    parameters:
+      - { name: locationId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getLocation
+      tags: [locations]
+      responses:
+        '200':
+          description: The location
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateLocation
+      tags: [locations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocationUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /locations/{locationId}/archive:
+    parameters:
+      - { name: locationId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: archiveLocation
+      tags: [locations]
+      responses:
+        '200':
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ------------------------------------------------------------- members
+  /members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of members
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberList' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /members/{memberId}:
+    parameters:
+      - { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Change a member's role and/or location restrictions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemberUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /members/{memberId}/deactivate:
+    parameters:
+      - { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: deactivateMember
+      tags: [members]
+      responses:
+        '200':
+          description: Deactivated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /members/{memberId}/reactivate:
+    parameters:
+      - { name: memberId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: reactivateMember
+      tags: [members]
+      responses:
+        '200':
+          description: Reactivated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # --------------------------------------------------------- invitations
+  /invitations:
+    get:
+      operationId: listInvitations
+      tags: [invitations]
+      summary: List pending invitations
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of pending invitations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationList' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createInvitation
+      tags: [invitations]
+      summary: Invite a person by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvitationCreate' }
+      responses:
+        '201':
+          description: Created and emailed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invitation' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /invitations/{invitationId}/revoke:
+    parameters:
+      - { name: invitationId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: revokeInvitation
+      tags: [invitations]
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invitation' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # --------------------------------------------------------------- audit
+  /audit-events:
+    get:
+      operationId: listAuditEvents
+      tags: [audit]
+      summary: List the organisation's audit events, newest first
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - { name: from, in: query, description: Inclusive lower bound, schema: { type: string, format: date-time } }
+        - { name: to, in: query, description: Exclusive upper bound, schema: { type: string, format: date-time } }
+        - { name: actor_user_id, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: target_type, in: query, schema: { type: string } }
+        - { name: target_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: A page of audit events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventList' }
+        default: { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: ds_session
+
+  headers:
+    SetCookie:
+      schema: { type: string }
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Page size (default 50, max 200)
+      schema: { type: integer, minimum: 1, maximum: 200 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from a previous page's next_cursor
+      schema: { type: string }
+    UpdatedSince:
+      name: updated_since
+      in: query
+      description: Return records created, changed or archived after this time, in modification order
+      schema: { type: string, format: date-time }
+
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, request_id]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        request_id: { type: string }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/FieldError' }
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field: { type: string }
+        message: { type: string }
+
+    Role:
+      type: string
+      enum: [owner, admin, practitioner, front_desk]
+
+    # auth
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    SwitchOrganisationRequest:
+      type: object
+      required: [organisation_id]
+      properties:
+        organisation_id: { type: string, format: uuid }
+    SwitchLocationRequest:
+      type: object
+      required: [location_id]
+      properties:
+        location_id: { type: string, format: uuid, nullable: true }
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+    PasswordResetComplete:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string }
+        password: { type: string }
+    UserSummary:
+      type: object
+      required: [id, email, name]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+    MembershipSummary:
+      type: object
+      required: [organisation_id, organisation_name, organisation_status, role, status]
+      properties:
+        organisation_id: { type: string, format: uuid }
+        organisation_name: { type: string }
+        organisation_status: { type: string, enum: [active, suspended] }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { type: string, enum: [active, deactivated] }
+    SessionInfo:
+      type: object
+      required:
+        - user
+        - memberships
+        - active_organisation_id
+        - active_location_id
+        - role
+        - permissions
+        - accessible_location_ids
+      properties:
+        user: { $ref: '#/components/schemas/UserSummary' }
+        memberships:
+          type: array
+          items: { $ref: '#/components/schemas/MembershipSummary' }
+        active_organisation_id: { type: string, format: uuid, nullable: true }
+        active_location_id: { type: string, format: uuid, nullable: true }
+        role:
+          type: string
+          nullable: true
+          enum: [owner, admin, practitioner, front_desk]
+        permissions:
+          type: array
+          items: { type: string }
+        accessible_location_ids:
+          type: array
+          items: { type: string, format: uuid }
+    InvitationPreview:
+      type: object
+      required: [organisation_name, email, role, expires_at, existing_account]
+      properties:
+        organisation_name: { type: string }
+        email: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        expires_at: { type: string, format: date-time }
+        existing_account:
+          type: boolean
+          description: When true, accept with the account's existing password; name is ignored.
+    AcceptInvitationRequest:
+      type: object
+      required: [password]
+      properties:
+        name: { type: string, description: Required when creating a new account }
+        password: { type: string }
+
+    # locations
+    Location:
+      type: object
+      required:
+        [id, name, address_line1, address_line2, suburb, state, postcode, phone, email, timezone, archived_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        address_line1: { type: string }
+        address_line2: { type: string }
+        suburb: { type: string }
+        state: { type: string }
+        postcode: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        timezone: { type: string, description: IANA timezone, e.g. Australia/Sydney }
+        archived_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    LocationCreate:
+      type: object
+      required: [name, timezone]
+      properties:
+        name: { type: string }
+        address_line1: { type: string }
+        address_line2: { type: string }
+        suburb: { type: string }
+        state: { type: string }
+        postcode: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        timezone: { type: string }
+    LocationUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        address_line1: { type: string }
+        address_line2: { type: string }
+        suburb: { type: string }
+        state: { type: string }
+        postcode: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        timezone: { type: string }
+    LocationList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Location' }
+        next_cursor: { type: string, nullable: true }
+        sync_until:
+          type: string
+          format: date-time
+          description: Present when updated_since was given; use as the next updated_since.
+
+    # members
+    Member:
+      type: object
+      required: [id, user_id, email, name, role, status, location_ids, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid, description: Membership id }
+        user_id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { type: string, enum: [active, deactivated] }
+        location_ids:
+          type: array
+          description: Empty means unrestricted (all locations)
+          items: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MemberUpdate:
+      type: object
+      properties:
+        role: { $ref: '#/components/schemas/Role' }
+        location_ids:
+          type: array
+          description: Replaces restrictions; empty means unrestricted
+          items: { type: string, format: uuid }
+    MemberList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Member' }
+        next_cursor: { type: string, nullable: true }
+
+    # invitations
+    Invitation:
+      type: object
+      required: [id, email, role, location_ids, invited_by, expires_at, created_at, accepted_at, revoked_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        location_ids:
+          type: array
+          items: { type: string, format: uuid }
+        invited_by: { type: string, format: uuid, nullable: true }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        accepted_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+    InvitationCreate:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        location_ids:
+          type: array
+          description: Restrict the new member to these locations; omit or empty for all
+          items: { type: string, format: uuid }
+    InvitationList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Invitation' }
+        next_cursor: { type: string, nullable: true }
+
+    # audit
+    AuditActor:
+      type: object
+      required: [id, email, name]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+    AuditEvent:
+      type: object
+      required: [id, actor, action, target_type, target_id, ip, user_agent, request_id, details, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        actor:
+          allOf: [{ $ref: '#/components/schemas/AuditActor' }]
+          nullable: true
+        action: { type: string, example: location.updated }
+        target_type: { type: string, nullable: true }
+        target_id: { type: string, format: uuid, nullable: true }
+        ip: { type: string }
+        user_agent: { type: string }
+        request_id: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+    AuditEventList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        next_cursor: { type: string, nullable: true }

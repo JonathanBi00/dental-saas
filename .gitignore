@@ -1,0 +1,18 @@
+# env
+.env
+*.local
+
+# Go
+/backend/bin/
+*.exe
+*.test
+coverage.out
+
+# Node
+node_modules/
+/frontend/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/

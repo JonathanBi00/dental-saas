@@ -1,0 +1,62 @@
+schema: spec-driven
+
+context: |
+  Product: multi-tenant dental practice management SaaS for Australian practices.
+  Our own internal domain logic replaces third-party PMS APIs (Dental4Web-style
+  resource groups: patients, appointments, clinical, financial, reference data,
+  uploads, imaging, FHIR). UI and future public API share one service layer.
+  Stack: Go backend (net/http or chi, pgx + sqlc, goose migrations, log/slog),
+  OpenAPI 3 spec in api/openapi.yaml is the source of truth (oapi-codegen for Go,
+  openapi-typescript for frontend). Frontend: React + Vite + TypeScript,
+  TanStack Query, Tailwind + shadcn/ui. PostgreSQL. Local dev only for now:
+  docker compose (Postgres, S3-compatible object store, Mailpit), API on localhost:8080, Vite on
+  localhost:5173 proxying /api. No load balancers, domains or cloud infra yet.
+  Tenancy: every tenant-owned row has org_id; isolation enforced by Postgres
+  row-level security in addition to application checks. Location-scoped data
+  carries location_id.
+  Data conventions: UUID primary keys, created_at/updated_at on every table,
+  soft delete (deleted_at), money as integer cents (AUD), timestamps stored UTC
+  with per-location IANA timezone, clinical records append-only (amend, never
+  overwrite).
+  List endpoints support filtering (patient, practitioner, location, date range),
+  cursor pagination, and updated_since delta sync.
+  Compliance: health information under the Australian Privacy Act / APPs; audit
+  log of access and changes to patient data; role-based access control.
+  Testing: Go tests against real Postgres via testcontainers-go; RLS isolation
+  must have tests.
+
+rules:
+  tasks:
+    - Every task that adds an endpoint includes updating api/openapi.yaml first
+    - Include tests for tenant isolation on any new tenant-owned table
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

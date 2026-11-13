@@ -1,0 +1,12 @@
+* text=auto
+*.go   text eol=lf
+*.sql  text eol=lf
+*.sh   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+
+# Generated code
+backend/internal/store/*.go          linguist-generated=true
+backend/internal/api/gen/*.go        linguist-generated=true
+frontend/src/api/schema.gen.ts       linguist-generated=true
+frontend/src/routeTree.gen.ts        linguist-generated=true
