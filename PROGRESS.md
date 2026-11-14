@@ -1,15 +1,15 @@
 # Progress: where we're at
 
-_Last updated: 2026-11-13_
+_Last updated: 2026-11-14_
 
 ## TL;DR
 
 - We're building a multi-tenant dental practice management SaaS for Australian practices.
 - We build the practice-management logic ourselves (patients, appointments, billing, etc.) instead of calling a third-party practice-management API like Dental4Web.
 - We follow **[OpenSpec](https://openspec.dev/)**: **propose → review → apply → archive**. Every piece of work starts as a change in `openspec/changes/`.
-- The first change is **`add-platform-foundation`** (Phase 0). Its tasks are **3 of 42 complete**.
+- The first change is **`add-platform-foundation`** (Phase 0). Its tasks are **5 of 42 complete** (all of group 1).
 - A lot of later-task code already exists and mostly works. It's **not ticked off yet** because each task's verification still has to be finished; see [Status by task group](#status-by-task-group).
-- Nothing is committed to git yet.
+- Delivery is **MVP first**: ship a thin working version, and list extras as follow-ups.
 
 ## Read these first (in order)
 
@@ -25,23 +25,23 @@ _Last updated: 2026-11-13_
 |---|---|
 | Backend | Go 1.26, standard library `net/http`, pgx + sqlc, goose migrations, `log/slog` |
 | API contract | `api/openapi.yaml` is the source of truth. Go server code is generated with oapi-codegen. |
-| Frontend | React + Vite + TypeScript, TanStack Query/Router, Tailwind + shadcn/ui _(not started)_ |
+| Frontend | React 19 + Vite + TypeScript, TanStack Query/Router, Tailwind v4 + shadcn/ui _(scaffold only: placeholder page)_ |
 | Database | PostgreSQL 17. Practices are kept apart by **row-level security** inside the database. |
 | Local services | Docker Compose: Postgres, SeaweedFS (S3-compatible storage), Mailpit (catches outgoing email) |
 
 ## Get running (about 5 minutes)
 
-Prerequisites: Go 1.26+, Node 22+, Docker Desktop, and the OpenSpec CLI (`npm i -g @fission-ai/openspec`).
+Prerequisites: Go 1.26+, Node 22+, Docker Desktop, [Task](https://taskfile.dev) (`winget install Task.Task`), and the OpenSpec CLI (`npm i -g @fission-ai/openspec`).
 
 ```bash
-cp .env.example .env                 # .env is gitignored
-docker compose up -d --wait          # postgres, objectstore, mailpit
-
-cd backend
-go run ./cmd/dentalctl migrate up    # create the schema
-go run ./cmd/dentalctl seed          # demo data (safe to re-run)
-go run ./cmd/dentalctl serve         # API on http://localhost:8080
+cp .env.example .env    # .env is gitignored
+task up                 # postgres, objectstore, mailpit
+task migrate            # create the schema
+task seed               # demo data (safe to re-run)
+task dev                # API on :8080 + web app on http://localhost:5173 (Ctrl+C stops both)
 ```
+
+Other commands: `task gen` (regenerate sqlc, oapi-codegen and TypeScript types), `task test`, `task lint`, `task down`. Run `task --list` for all of them.
 
 - **Demo sign-ins** (password `demo-password-123`):
   - `owner@demo.local` is the owner of "Demo Dental".
@@ -57,18 +57,17 @@ go run ./cmd/dentalctl serve         # API on http://localhost:8080
     localhost:8080/api/v1/auth/login
   curl -b cj.txt localhost:8080/api/v1/locations
   ```
-- **Tests** (need Docker; each package starts its own throwaway Postgres): `cd backend && go test ./...`
+- **Tests** (need Docker; each package starts its own throwaway Postgres): `task test`
 
 ## Gotchas
 
 - **Postgres is on port 5433**, not 5432, to avoid clashing with a local Postgres install.
 - **MinIO was replaced by SeaweedFS.** MinIO no longer publishes public Docker images. File storage isn't used until Phase 6.
-- **sqlc runs through Docker** because its parser doesn't build on Windows without a C compiler:
-  `cd backend && MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/src" -w /src sqlc/sqlc:1.30.0 generate`
-- **Regenerating the API code:**
-  `cd backend && go tool oapi-codegen -config oapi-codegen.yaml ../api/openapi.yaml && cp ../api/openapi.yaml internal/api/openapi.yaml`
-  The copy is embedded and served by the API.
-- **No Taskfile yet** (task 1.5), so run the commands above by hand for now.
+- **sqlc runs through Docker** because its parser doesn't build on Windows without a C compiler. `task gen` handles this.
+- **`backend/internal/api/openapi.yaml` is a copy** of `api/openapi.yaml`, embedded and served by the API. `task gen` refreshes it.
+- **The browser only talks to Vite.** Vite forwards `/api` to the Go API, so the sign-in cookie is same-origin and there's no CORS setup.
+- **`frontend/src/routeTree.gen.ts` is generated** by the TanStack Router plugin whenever Vite runs. Commit it, don't edit it.
+- **TypeScript is pinned to 5.9** because `openapi-typescript` doesn't support TypeScript 6 yet.
 - **Ryuk is disabled in tests.** Ryuk is the cleanup container testcontainers normally uses, and it won't start on Docker Desktop for Windows. Instead, each test package calls `testdb.Main(m)` in `TestMain` to remove its container.
 - **The OpenSpec slash commands** (`/openspec-propose`, `/openspec-apply-change`, etc.) live in `.claude/skills/`. Start Claude Code from this folder to get them.
 
@@ -76,21 +75,22 @@ go run ./cmd/dentalctl serve         # API on http://localhost:8080
 
 | Group | State |
 |---|---|
-| **1. Repo and local stack** | ✅ 1.1–1.3 done. ⬜ 1.4 frontend scaffold and 1.5 Taskfile not started. |
+| **1. Repo and local stack** | ✅ Done. Frontend scaffold builds and serves a placeholder; `task up`/`dev`/`gen`/`test`/`lint` verified on Windows. |
 | **2. Platform core** | 🟡 Code written. The database tests pass: no context leaks between pooled connections, the RLS guard, migrations up/down/up. Unit tests for errors and pagination pass. Still to do: wire up `task gen` (2.5) and an HTTP test for health checks (2.7). |
 | **3. Locations** | 🟡 Endpoints work in manual testing, and the cross-practice isolation tests pass. The HTTP and service test cases aren't written yet. `org create` hasn't been run against Mailpit. |
 | **4. Sign-in, sessions, invitations, reset** | 🟡 All code written and sign-in checked by hand. Password unit tests pass. The HTTP test cases (lockout, expiry, invites, reset) aren't written yet. |
 | **5. Roles and permissions** | 🟡 Permission matrix, location restrictions and owner-protection rules written. No tests yet. |
 | **6. Audit log** | 🟡 Append-only enforcement tested, and secret-stripping tested. Audit calls are in every service. The HTTP tests and list-endpoint tests aren't written yet. |
-| **7. Frontend** | ⬜ Not started. |
+| **7. Frontend** | ⬜ Not started (scaffold from 1.4 is in place; TypeScript API types already generate into `src/api/schema.gen.ts`). |
 | **8. Seed, docs, end-to-end check** | 🟡 Seed works and is safe to re-run. Proper README and end-to-end check not done. |
 
-**Next step:** finish the API test suite. `backend/internal/api/harness_test.go` is written but no test cases use it yet. After that, task 1.4 (frontend scaffold) and 1.5 (Taskfile), then tick off groups 2–6 as their checks pass.
+**Next step:** finish the API test suite. `backend/internal/api/harness_test.go` is written but no test cases use it yet. Then tick off groups 2–6 as their checks pass, and start the frontend screens (group 7).
 
 ## How the code is organised
 
 ```
-api/openapi.yaml                  API contract (edit this first, then regenerate)
+api/openapi.yaml                  API contract (edit this first, then `task gen`)
+Taskfile.yml                      developer commands (task up | dev | gen | migrate | seed | test | lint)
 db/init/01-roles.sql              creates DB roles (runs once when the Postgres volume is created)
 backend/
   cmd/dentalctl/                  single binary: serve | migrate | seed | org create

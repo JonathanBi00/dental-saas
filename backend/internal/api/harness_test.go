@@ -122,9 +122,9 @@ func (c *client) do(method, path string, body any) resp {
 	return resp{Status: res.StatusCode, Body: b, Header: res.Header}
 }
 
-func (c *client) get(path string) resp              { return c.do(http.MethodGet, path, nil) }
-func (c *client) post(path string, body any) resp   { return c.do(http.MethodPost, path, body) }
-func (c *client) patch(path string, body any) resp  { return c.do(http.MethodPatch, path, body) }
+func (c *client) get(path string) resp             { return c.do(http.MethodGet, path, nil) }
+func (c *client) post(path string, body any) resp  { return c.do(http.MethodPost, path, body) }
+func (c *client) patch(path string, body any) resp { return c.do(http.MethodPatch, path, body) }
 func (c *client) sessionCookie() string {
 	u, _ := url.Parse(c.h.srv.URL)
 	for _, ck := range c.hc.Jar.Cookies(u) {

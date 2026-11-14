@@ -1,0 +1,97 @@
+# Developer commands. Install go-task (https://taskfile.dev), e.g. `winget install Task.Task`.
+# Run `task --list` to see everything.
+version: "3"
+
+vars:
+  SQLC_IMAGE: sqlc/sqlc:1.30.0
+
+tasks:
+  up:
+    desc: Start Postgres, the object store and Mailpit, waiting until they're healthy
+    cmds:
+      - docker compose up -d --wait
+
+  down:
+    desc: Stop the containers (data volumes are kept)
+    cmds:
+      - docker compose down
+
+  gen:
+    desc: Regenerate code from SQL (sqlc) and from api/openapi.yaml (Go server + TypeScript types)
+    cmds:
+      - task: gen:sqlc
+      - task: gen:api
+      - task: gen:ts
+
+  gen:sqlc:
+    internal: true
+    # sqlc runs in Docker because its parser doesn't build on Windows without a C compiler.
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}/backend:/src" -w /src {{.SQLC_IMAGE}} generate
+
+  gen:api:
+    internal: true
+    dir: backend
+    cmds:
+      - go tool oapi-codegen -config oapi-codegen.yaml ../api/openapi.yaml
+      # The API embeds and serves a copy of the spec.
+      - cp ../api/openapi.yaml internal/api/openapi.yaml
+
+  gen:ts:
+    internal: true
+    dir: frontend
+    deps: [web:install]
+    cmds:
+      - npx openapi-typescript ../api/openapi.yaml -o src/api/schema.gen.ts
+
+  migrate:
+    desc: "Run database migrations (default: up). Pass a direction after --, e.g. `task migrate -- status`"
+    dir: backend
+    cmds:
+      - go run ./cmd/dentalctl migrate {{.CLI_ARGS | default "up"}}
+
+  seed:
+    desc: Create the demo organisation, locations and users (safe to re-run)
+    dir: backend
+    cmds:
+      - go run ./cmd/dentalctl seed
+
+  dev:
+    desc: Run the API on :8080 and the web app on :5173 (Ctrl+C stops both)
+    deps: [dev:api, dev:web]
+
+  dev:api:
+    internal: true
+    dir: backend
+    cmds:
+      - go run ./cmd/dentalctl serve
+
+  dev:web:
+    internal: true
+    dir: frontend
+    deps: [web:install]
+    cmds:
+      - npm run dev
+
+  web:install:
+    internal: true
+    dir: frontend
+    # Skipped once node_modules exists; run `npm install` in frontend/ after pulling dependency changes.
+    status:
+      - test -d node_modules
+    cmds:
+      - npm install
+
+  test:
+    desc: Run backend tests (needs Docker; each package starts its own Postgres)
+    dir: backend
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: Check Go formatting, go vet and the frontend ESLint rules
+    deps: [web:install]
+    cmds:
+      - test -z "$(gofmt -l backend)" || (echo "gofmt needed on:"; gofmt -l backend; exit 1)
+      - cd backend && go vet ./...
+      - cd frontend && npm run lint
