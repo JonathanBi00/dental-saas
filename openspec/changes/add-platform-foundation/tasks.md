@@ -5,8 +5,8 @@
 - [x] 1.1 Create the monorepo layout from design D1, plus `.gitignore`, `.gitattributes` (LF for go/sql/sh, generated dirs marked `linguist-generated`) and `.env.example`; verify the expected directories exist
 - [x] 1.2 Add `docker-compose.yml` with Postgres 17 (init script creating `dental_owner` and `dental_app` roles and the database), an S3-compatible object store (SeaweedFS) and Mailpit; verify `docker compose up -d` reports all three healthy and Mailpit's UI loads on localhost:8025
 - [x] 1.3 Initialise the Go module in `backend/` with `cmd/dentalctl` (subcommands `serve`, `migrate`, `seed`, `org create`) and env-based config loading; verify `go build ./...` succeeds and `dentalctl --help` lists the subcommands
-- [ ] 1.4 Scaffold `frontend/` with Vite + React + TypeScript, Tailwind, shadcn/ui, TanStack Router and Query, with `/api` proxied to localhost:8080; verify `npm run build` succeeds and the dev server serves a placeholder page on localhost:5173
-- [ ] 1.5 Add `Taskfile.yml` with `up`, `down`, `gen`, `migrate`, `seed`, `dev`, `test` and `lint`; verify `task up` and `task dev` start the stack on Windows
+- [x] 1.4 Scaffold `frontend/` with Vite + React + TypeScript, Tailwind, shadcn/ui, TanStack Router and Query, with `/api` proxied to localhost:8080; verify `npm run build` succeeds and the dev server serves a placeholder page on localhost:5173
+- [x] 1.5 Add `Taskfile.yml` with `up`, `down`, `gen`, `migrate`, `seed`, `dev`, `test` and `lint`; verify `task up` and `task dev` start the stack on Windows
 
 ## 2. Platform core (backend)
 
