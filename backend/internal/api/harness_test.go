@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"dentalsaas/internal/access"
@@ -95,6 +96,16 @@ type resp struct {
 // do sends a request as the web app would (same-origin Origin header, JSON body).
 func (c *client) do(method, path string, body any) resp {
 	c.h.t.Helper()
+	hdr := map[string]string{}
+	if method != http.MethodGet {
+		hdr["Origin"] = appOrigin
+	}
+	return c.doWith(hdr, method, path, body)
+}
+
+// doWith sends a request with exactly the given extra headers (no Origin unless supplied).
+func (c *client) doWith(hdr map[string]string, method, path string, body any) resp {
+	c.h.t.Helper()
 	var r io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -110,8 +121,8 @@ func (c *client) do(method, path string, body any) resp {
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if method != http.MethodGet {
-		req.Header.Set("Origin", appOrigin)
+	for k, v := range hdr {
+		req.Header.Set(k, v)
 	}
 	res, err := c.hc.Do(req)
 	if err != nil {
@@ -133,6 +144,22 @@ func (c *client) sessionCookie() string {
 		}
 	}
 	return ""
+}
+
+// withSessionCookie returns a new client that presents the given session cookie value.
+func (h *harness) withSessionCookie(value string) *client {
+	c := h.client()
+	u, _ := url.Parse(h.srv.URL)
+	c.hc.Jar.SetCookies(u, []*http.Cookie{{Name: identity.CookieName, Value: value, Path: "/"}})
+	return c
+}
+
+// session fetches the caller's current session info.
+func (c *client) session(t *testing.T) gen.SessionInfo {
+	t.Helper()
+	var s gen.SessionInfo
+	expect(t, c.get("/api/v1/auth/session"), http.StatusOK, &s)
+	return s
 }
 
 // expect fails the test unless the response has the given status, and decodes the body into v.
@@ -196,9 +223,9 @@ func (h *harness) tokenFromMail(t *testing.T, addr string) string {
 	return match[1]
 }
 
-// countGlobalAudit counts audit events (including pre-tenant ones no tenant can read)
-// whose details.email matches.
-func (h *harness) countGlobalAudit(t *testing.T, action, email string) int {
+// superuser runs fn on a connection that bypasses RLS. Only for assertions on rows no tenant
+// can read, such as pre-tenant audit events.
+func (h *harness) superuser(t *testing.T, fn func(ctx context.Context, conn *pgx.Conn) error) {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, h.env.SuperuserURL())
@@ -206,11 +233,32 @@ func (h *harness) countGlobalAudit(t *testing.T, action, email string) int {
 		t.Fatal(err)
 	}
 	defer conn.Close(ctx)
-	var n int
-	if err := conn.QueryRow(ctx,
-		"SELECT count(*) FROM audit_events WHERE action = $1 AND details->>'email' = $2", action, email,
-	).Scan(&n); err != nil {
+	if err := fn(ctx, conn); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// countGlobalAudit counts audit events (including pre-tenant ones no tenant can read)
+// whose details.email matches.
+func (h *harness) countGlobalAudit(t *testing.T, action, email string) int {
+	t.Helper()
+	var n int
+	h.superuser(t, func(ctx context.Context, conn *pgx.Conn) error {
+		return conn.QueryRow(ctx,
+			"SELECT count(*) FROM audit_events WHERE action = $1 AND details->>'email' = $2", action, email,
+		).Scan(&n)
+	})
+	return n
+}
+
+// countTargetAudit counts audit events for an action and target in any (or no) organisation.
+func (h *harness) countTargetAudit(t *testing.T, action string, target uuid.UUID) int {
+	t.Helper()
+	var n int
+	h.superuser(t, func(ctx context.Context, conn *pgx.Conn) error {
+		return conn.QueryRow(ctx,
+			"SELECT count(*) FROM audit_events WHERE action = $1 AND target_id = $2", action, target,
+		).Scan(&n)
+	})
 	return n
 }
