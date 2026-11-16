@@ -47,6 +47,14 @@ func init() {
 	if _, set := os.LookupEnv("TESTCONTAINERS_RYUK_DISABLED"); !set {
 		os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
 	}
+	// testcontainers probes for the Docker socket path on startup. On Windows that probe can
+	// fail with "rootless Docker is not supported" when several test packages start at once
+	// (as `go test ./...` does). Docker Desktop's in-VM socket path is fixed, so set it directly.
+	if runtime.GOOS == "windows" {
+		if _, set := os.LookupEnv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE"); !set {
+			os.Setenv("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "//var/run/docker.sock")
+		}
+	}
 }
 
 // Main runs a package's tests and then removes the database container.
