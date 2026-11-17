@@ -4,7 +4,7 @@ Practice management software for Australian dental practices, run as one shared 
 
 It will cover the day-to-day running of a practice: patients, appointments, clinical records, billing and health funds, files and imaging. We build that logic ourselves instead of relying on a third-party practice management system's API. The web app and a future public API for integrators share the same backend.
 
-> **Status: early development.** We're on Phase 0, the platform foundation: practices and locations, user accounts and sign-in, roles and permissions, and an audit log. No dental features exist yet, and the web app is a placeholder page. We're aiming for a small first release (MVP) rather than building every feature before shipping. See [`PROGRESS.md`](PROGRESS.md) for where things are up to.
+> **Status: early development.** We're on Phase 0, the platform foundation: practices and locations, user accounts and sign-in, roles and permissions, and an audit log. No dental features exist yet. The web app has sign-in, password reset, invitations, and settings screens for locations, users and the audit log. We're aiming for a small first release (MVP) rather than building every feature before shipping. See [`PROGRESS.md`](PROGRESS.md) for where things are up to.
 
 ## How it fits together
 
@@ -61,7 +61,9 @@ The seed creates a practice called **Demo Dental**, with locations **Sydney CBD*
 | `owner@demo.local` | Owner: can do everything |
 | `frontdesk@demo.local` | Front desk: limited to the Parramatta location |
 
-The sign-in screens aren't built yet, so try the API directly. In Git Bash, macOS or Linux:
+Open http://localhost:5173 and sign in. The owner sees **Settings** (Locations, Users, Audit log). Front desk sees only Parramatta and no settings. Invitation and password-reset emails land in Mailpit (http://localhost:8025); their links open the web app.
+
+To try the API directly instead (Git Bash, macOS or Linux):
 
 ```bash
 # Sign in and save the session cookie
@@ -78,7 +80,7 @@ Sign in as `frontdesk@demo.local` instead and the list only contains Parramatta.
 ### 4. Run the tests and checks
 
 ```bash
-task test   # backend tests; each package starts its own throwaway Postgres in Docker
+task test   # backend tests (each package starts its own throwaway Postgres in Docker), then web app tests (Vitest)
 task lint   # Go formatting, go vet, and ESLint for the web app
 ```
 
@@ -95,7 +97,7 @@ task lint   # Go formatting, go vet, and ESLint for the web app
 | `task seed` | Create the demo practice and users |
 | `task dev` | Run the API (:8080) and web app (:5173) |
 | `task gen` | Regenerate code after changing `api/openapi.yaml` or `backend/queries/*.sql` |
-| `task test` | Run the backend tests |
+| `task test` | Run the backend and web app tests |
 | `task lint` | Run formatting and lint checks |
 
 ## Repo layout
@@ -115,8 +117,10 @@ backend/
     platform/           shared plumbing: database, HTTP errors, middleware, email, audit writing
     store/, api/gen/    generated code; don't edit
 frontend/
-  src/routes/           pages
+  src/api/              typed API client (client.ts) + generated types (schema.gen.ts; don't edit)
+  src/routes/           pages: signed-out screens at the top, signed-in screens under _app/
   src/components/ui/    shadcn/ui components
+  src/lib/              session, Query setup (401 → sign in), form validation, roles
 db/init/                creates the database roles when the Postgres container is first created
 openspec/               proposals, designs, specs and task lists for each change
 ```

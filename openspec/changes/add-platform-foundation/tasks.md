@@ -29,36 +29,36 @@
 
 - [x] 4.1 Migration: `users` (citext email), `memberships` (org_id, user_id, role, status), `membership_locations`, `sessions`, `login_attempts`, `invitations`, `password_resets`, plus SECURITY DEFINER auth lookup functions with a pinned search_path; verify isolation tests for memberships/invitations, and that `dental_app` cannot select `users` across tenants except through the functions
 - [x] 4.2 Implement argon2id hashing (PHC format) and the password policy (≥12 characters, not equal to email); verify unit tests for hash/verify round-trip and policy rejections
-- [ ] 4.3 Implement the session service: token generation, hashed storage, idle (60 min) and absolute (12 h) expiry, throttled `last_seen_at`, and revocation; verify tests using a fake clock cover idle expiry, sliding extension and the absolute cap
-- [ ] 4.4 Implement the auth middleware: cookie → session → active membership and organisation status re-check → tenant context in `context.Context`; verify tests for 401 on expired/revoked sessions, 403 for deactivated membership and 403 for a suspended organisation
-- [ ] 4.5 Implement the Origin / Sec-Fetch-Site check for unsafe methods; verify a POST with a foreign Origin returns 403 and makes no change
-- [ ] 4.6 Add the mail package (SMTP to Mailpit, plain-text and HTML templates for invite and reset); verify a test sends to a fake SMTP server and Mailpit receives mail in manual dev
-- [ ] 4.7 Define the auth endpoints in OpenAPI, then implement `POST /auth/login`, `POST /auth/logout` and `GET /auth/session` (user, memberships, active org/location, role, permissions, accessible locations) with dummy-hash timing and lockout after 5 failures; verify HTTP tests for identical 401s for an unknown email and a wrong password, a 429 on the sixth attempt, and auto-selection of a single organisation
-- [ ] 4.8 Define and implement `POST /auth/session/organisation` and `POST /auth/session/location` (active switching with membership and location checks); verify tests that switching to a non-member organisation or a restricted location returns 403 and leaves state unchanged
-- [ ] 4.9 Define and implement the password reset endpoints (request, complete) with single-use 60-minute tokens that revoke all of the user's sessions; verify tests for an identical response for unknown emails, token reuse rejected and other sessions revoked
-- [ ] 4.10 Define and implement the invitation endpoints (create, list pending, revoke, look up by token, accept) with 7-day single-use tokens and case-insensitive email matching to existing accounts; verify tests for new-user accept, existing-user accept (no duplicate account) and rejection of expired/used tokens
+- [x] 4.3 Implement the session service: token generation, hashed storage, idle (60 min) and absolute (12 h) expiry, throttled `last_seen_at`, and revocation; verify tests using a fake clock cover idle expiry, sliding extension and the absolute cap
+- [x] 4.4 Implement the auth middleware: cookie → session → active membership and organisation status re-check → tenant context in `context.Context`; verify tests for 401 on expired/revoked sessions, 403 for deactivated membership and 403 for a suspended organisation
+- [x] 4.5 Implement the Origin / Sec-Fetch-Site check for unsafe methods; verify a POST with a foreign Origin returns 403 and makes no change
+- [x] 4.6 Add the mail package (SMTP to Mailpit, plain-text and HTML templates for invite and reset); verify a test sends to a fake SMTP server and Mailpit receives mail in manual dev
+- [x] 4.7 Define the auth endpoints in OpenAPI, then implement `POST /auth/login`, `POST /auth/logout` and `GET /auth/session` (user, memberships, active org/location, role, permissions, accessible locations) with dummy-hash timing and lockout after 5 failures; verify HTTP tests for identical 401s for an unknown email and a wrong password, a 429 on the sixth attempt, and auto-selection of a single organisation
+- [x] 4.8 Define and implement `POST /auth/session/organisation` and `POST /auth/session/location` (active switching with membership and location checks); verify tests that switching to a non-member organisation or a restricted location returns 403 and leaves state unchanged
+- [x] 4.9 Define and implement the password reset endpoints (request, complete) with single-use 60-minute tokens that revoke all of the user's sessions; verify tests for an identical response for unknown emails, token reuse rejected and other sessions revoked
+- [x] 4.10 Define and implement the invitation endpoints (create, list pending, revoke, look up by token, accept) with 7-day single-use tokens and case-insensitive email matching to existing accounts; verify tests for new-user accept, existing-user accept (no duplicate account) and rejection of expired/used tokens
 
 ## 5. Access control
 
-- [ ] 5.1 Implement the `access` package: role→permission map (`locations:read`, `locations:manage`, `members:manage`, `audit:read`), a handler permission requirement, and accessible-location resolution; verify unit tests of the matrix for all four roles
-- [ ] 5.2 Apply permissions and location scoping to the location endpoints; verify HTTP tests that front_desk cannot create (403) and a restricted practitioner lists only their locations
-- [ ] 5.3 Define and implement the member endpoints (list members, change role, set location restrictions, deactivate/reactivate) with the owner-protection rules; verify tests that an admin cannot grant owner (403) and removing the last owner returns 409
+- [x] 5.1 Implement the `access` package: role→permission map (`locations:read`, `locations:manage`, `members:manage`, `audit:read`), a handler permission requirement, and accessible-location resolution; verify unit tests of the matrix for all four roles
+- [x] 5.2 Apply permissions and location scoping to the location endpoints; verify HTTP tests that front_desk cannot create (403) and a restricted practitioner lists only their locations
+- [x] 5.3 Define and implement the member endpoints (list members, change role, set location restrictions, deactivate/reactivate) with the owner-protection rules; verify tests that an admin cannot grant owner (403) and removing the last owner returns 409
 
 ## 6. Audit log
 
 - [x] 6.1 Migration: `audit_events` with nullable org_id, INSERT/SELECT-only grants, a trigger rejecting UPDATE/DELETE and an RLS select policy; verify tests that `dental_app` UPDATE and DELETE fail and org B cannot read org A's events
 - [x] 6.2 Implement `audit.Record(tx, event)` using request metadata from context, with field diffs that exclude secrets; verify a unit test that password hashes and tokens never appear in an entry
-- [ ] 6.3 Add audit calls to every auth event and mutation from groups 3–5, plus an `assertAudited` test helper; verify each existing mutating endpoint test asserts its audit action and that a rolled-back change leaves no audit row
-- [ ] 6.4 Define and implement `GET /api/v1/audit-events` (filters: date range, actor, action, target; newest first; paginated; `audit:read` required); verify HTTP tests for the actor filter and 403 for a practitioner
+- [x] 6.3 Add audit calls to every auth event and mutation from groups 3–5, plus an `assertAudited` test helper; verify each existing mutating endpoint test asserts its audit action and that a rolled-back change leaves no audit row
+- [x] 6.4 Define and implement `GET /api/v1/audit-events` (filters: date range, actor, action, target; newest first; paginated; `audit:read` required); verify HTTP tests for the actor filter and 403 for a practitioner
 
 ## 7. Frontend
 
-- [ ] 7.1 Generate the typed API client with openapi-typescript + openapi-fetch, plus a TanStack Query setup that redirects to `/login` on 401; verify `task gen` produces the client and a Vitest test covers the 401 redirect
-- [ ] 7.2 Build the sign-in, forgot-password, reset-password and accept-invite screens with form validation; verify manually against the dev stack (sign in as the seeded owner, complete a reset using the Mailpit link) and add Vitest tests for client-side validation
-- [ ] 7.3 Build the authenticated app shell with organisation and location switchers and permission-gated navigation; verify a Vitest test that hides admin navigation for front_desk, and a manual switch between seeded locations
-- [ ] 7.4 Build the Settings → Locations screen (list, create, edit, archive, show archived); verify manually that changes persist and appear in the audit log
-- [ ] 7.5 Build the Settings → Users screen (members, pending invitations, invite, change role, restrict locations, deactivate); verify manually by inviting a user, accepting via Mailpit and signing in as them
-- [ ] 7.6 Build the Settings → Audit log screen with filters and pagination; verify manually that the actions from 7.4 and 7.5 appear with the correct actor
+- [x] 7.1 Generate the typed API client with openapi-typescript + openapi-fetch, plus a TanStack Query setup that redirects to `/login` on 401; verify `task gen` produces the client and a Vitest test covers the 401 redirect
+- [x] 7.2 Build the sign-in, forgot-password, reset-password and accept-invite screens with form validation; verify manually against the dev stack (sign in as the seeded owner, complete a reset using the Mailpit link) and add Vitest tests for client-side validation
+- [x] 7.3 Build the authenticated app shell with organisation and location switchers and permission-gated navigation; verify a Vitest test that hides admin navigation for front_desk, and a manual switch between seeded locations
+- [x] 7.4 Build the Settings → Locations screen (list, create, edit, archive, show archived); verify manually that changes persist and appear in the audit log
+- [x] 7.5 Build the Settings → Users screen (members, pending invitations, invite, change role, restrict locations, deactivate); verify manually by inviting a user, accepting via Mailpit and signing in as them
+- [x] 7.6 Build the Settings → Audit log screen with filters and pagination; verify manually that the actions from 7.4 and 7.5 appear with the correct actor
 
 ## 8. Seed, docs and end-to-end check
 
