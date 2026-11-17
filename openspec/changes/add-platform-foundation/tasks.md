@@ -53,12 +53,12 @@
 
 ## 7. Frontend
 
-- [ ] 7.1 Generate the typed API client with openapi-typescript + openapi-fetch, plus a TanStack Query setup that redirects to `/login` on 401; verify `task gen` produces the client and a Vitest test covers the 401 redirect
-- [ ] 7.2 Build the sign-in, forgot-password, reset-password and accept-invite screens with form validation; verify manually against the dev stack (sign in as the seeded owner, complete a reset using the Mailpit link) and add Vitest tests for client-side validation
-- [ ] 7.3 Build the authenticated app shell with organisation and location switchers and permission-gated navigation; verify a Vitest test that hides admin navigation for front_desk, and a manual switch between seeded locations
-- [ ] 7.4 Build the Settings → Locations screen (list, create, edit, archive, show archived); verify manually that changes persist and appear in the audit log
-- [ ] 7.5 Build the Settings → Users screen (members, pending invitations, invite, change role, restrict locations, deactivate); verify manually by inviting a user, accepting via Mailpit and signing in as them
-- [ ] 7.6 Build the Settings → Audit log screen with filters and pagination; verify manually that the actions from 7.4 and 7.5 appear with the correct actor
+- [x] 7.1 Generate the typed API client with openapi-typescript + openapi-fetch, plus a TanStack Query setup that redirects to `/login` on 401; verify `task gen` produces the client and a Vitest test covers the 401 redirect
+- [x] 7.2 Build the sign-in, forgot-password, reset-password and accept-invite screens with form validation; verify manually against the dev stack (sign in as the seeded owner, complete a reset using the Mailpit link) and add Vitest tests for client-side validation
+- [x] 7.3 Build the authenticated app shell with organisation and location switchers and permission-gated navigation; verify a Vitest test that hides admin navigation for front_desk, and a manual switch between seeded locations
+- [x] 7.4 Build the Settings → Locations screen (list, create, edit, archive, show archived); verify manually that changes persist and appear in the audit log
+- [x] 7.5 Build the Settings → Users screen (members, pending invitations, invite, change role, restrict locations, deactivate); verify manually by inviting a user, accepting via Mailpit and signing in as them
+- [x] 7.6 Build the Settings → Audit log screen with filters and pagination; verify manually that the actions from 7.4 and 7.5 appear with the correct actor
 
 ## 8. Seed, docs and end-to-end check
 

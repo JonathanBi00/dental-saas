@@ -83,10 +83,11 @@ tasks:
       - npm install
 
   test:
-    desc: Run backend tests (needs Docker; each package starts its own Postgres)
-    dir: backend
+    desc: Run backend tests (needs Docker; each package starts its own Postgres) and frontend tests (Vitest)
+    deps: [web:install]
     cmds:
-      - go test ./...
+      - cd backend && go test ./...
+      - cd frontend && npm test
 
   lint:
     desc: Check Go formatting, go vet and the frontend ESLint rules

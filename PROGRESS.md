@@ -1,14 +1,14 @@
 # Progress: where we're at
 
-_Last updated: 2026-11-14_
+_Last updated: 2026-11-17_
 
 ## TL;DR
 
 - We're building a multi-tenant dental practice management SaaS for Australian practices.
 - We build the practice-management logic ourselves (patients, appointments, billing, etc.) instead of calling a third-party practice-management API like Dental4Web.
 - We follow **[OpenSpec](https://openspec.dev/)**: **propose → review → apply → archive**. Every piece of work starts as a change in `openspec/changes/`.
-- The first change is **`add-platform-foundation`** (Phase 0). Its tasks are **5 of 42 complete** (all of group 1).
-- A lot of later-task code already exists and mostly works. It's **not ticked off yet** because each task's verification still has to be finished; see [Status by task group](#status-by-task-group).
+- The first change is **`add-platform-foundation`** (Phase 0). Its tasks are **40 of 42 complete**: groups 1–7 and 8.1.
+- The frontend (group 7) is done: sign-in, password reset, invitations, the app shell and the Settings screens, verified with Vitest and by hand against the dev stack. Remaining: 8.2 (README check from a clean clone) and 8.3 (end-to-end check).
 - Delivery is **MVP first**: ship a thin working version, and list extras as follow-ups.
 
 ## Read these first (in order)
@@ -25,7 +25,7 @@ _Last updated: 2026-11-14_
 |---|---|
 | Backend | Go 1.26, standard library `net/http`, pgx + sqlc, goose migrations, `log/slog` |
 | API contract | `api/openapi.yaml` is the source of truth. Go server code is generated with oapi-codegen. |
-| Frontend | React 19 + Vite + TypeScript, TanStack Query/Router, Tailwind v4 + shadcn/ui _(scaffold only: placeholder page)_ |
+| Frontend | React 19 + Vite + TypeScript, TanStack Query/Router, Tailwind v4 + shadcn/ui, React Hook Form + Zod, openapi-fetch; Vitest + Testing Library |
 | Database | PostgreSQL 17. Practices are kept apart by **row-level security** inside the database. |
 | Local services | Docker Compose: Postgres, SeaweedFS (S3-compatible storage), Mailpit (catches outgoing email) |
 
@@ -76,15 +76,15 @@ Other commands: `task gen` (regenerate sqlc, oapi-codegen and TypeScript types),
 | Group | State |
 |---|---|
 | **1. Repo and local stack** | ✅ Done. Frontend scaffold builds and serves a placeholder; `task up`/`dev`/`gen`/`test`/`lint` verified on Windows. |
-| **2. Platform core** | 🟡 Code written. The database tests pass: no context leaks between pooled connections, the RLS guard, migrations up/down/up. Unit tests for errors and pagination pass. Still to do: wire up `task gen` (2.5) and an HTTP test for health checks (2.7). |
-| **3. Locations** | 🟡 Endpoints work in manual testing, and the cross-practice isolation tests pass. The HTTP and service test cases aren't written yet. `org create` hasn't been run against Mailpit. |
-| **4. Sign-in, sessions, invitations, reset** | 🟡 All code written and sign-in checked by hand. Password unit tests pass. The HTTP test cases (lockout, expiry, invites, reset) aren't written yet. |
-| **5. Roles and permissions** | 🟡 Permission matrix, location restrictions and owner-protection rules written. No tests yet. |
-| **6. Audit log** | 🟡 Append-only enforcement tested, and secret-stripping tested. Audit calls are in every service. The HTTP tests and list-endpoint tests aren't written yet. |
-| **7. Frontend** | ⬜ Not started (scaffold from 1.4 is in place; TypeScript API types already generate into `src/api/schema.gen.ts`). |
+| **2. Platform core** | ✅ Done. |
+| **3. Locations** | ✅ Done. |
+| **4. Sign-in, sessions, invitations, reset** | ✅ Done. |
+| **5. Roles and permissions** | ✅ Done. |
+| **6. Audit log** | ✅ Done. |
+| **7. Frontend** | ✅ Done. Typed client with 401 → sign in; sign-in, forgot/reset password and accept-invite screens; app shell with organisation/location switchers and permission-gated nav; Settings → Locations, Users and Audit log. Vitest covers validation, the 401 redirect and hidden admin nav; every screen was checked by hand against the dev stack. MVP follow-ups: lists load at most 200 rows with no paging, audit filters aren't kept in the URL, and the settings screens have no Vitest tests yet. |
 | **8. Seed, docs, end-to-end check** | 🟡 Seed works and is safe to re-run. Proper README and end-to-end check not done. |
 
-**Next step:** finish the API test suite. `backend/internal/api/harness_test.go` is written but no test cases use it yet. Then tick off groups 2–6 as their checks pass, and start the frontend screens (group 7).
+**Next step:** follow the README from a clean clone (8.2), then run the end-to-end check (8.3).
 
 ## How the code is organised
 
