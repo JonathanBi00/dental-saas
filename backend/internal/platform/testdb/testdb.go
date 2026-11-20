@@ -2,8 +2,12 @@
 // development, runs migrations as the owner, and hands tests a pool connected as the
 // runtime app role, so row-level security is exercised exactly as in the running system.
 //
-// One container is shared per test binary (i.e. per package). Tests isolate themselves by
+// One database is shared per test binary (i.e. per package). Tests isolate themselves by
 // creating their own organisations and unique emails.
+//
+// If TESTDB_ADMIN_URL is set (a superuser URL for a Postgres created from db/init, such as
+// the postgres-test service in docker-compose.yml), each package creates its own database
+// there and drops it afterwards. Otherwise a container is started with testcontainers.
 package testdb
 
 import (
@@ -17,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
@@ -39,6 +44,7 @@ var (
 	shared    *Env
 	startErr  error
 	container testcontainers.Container
+	dropDB    func() // set when using TESTDB_ADMIN_URL
 )
 
 func init() {
@@ -63,6 +69,12 @@ func init() {
 //	func TestMain(m *testing.M) { testdb.Main(m) }
 func Main(m *testing.M) {
 	code := m.Run()
+	if shared != nil && shared.Pool != nil {
+		shared.Pool.Close()
+	}
+	if dropDB != nil {
+		dropDB()
+	}
 	if container != nil {
 		_ = container.Terminate(context.Background())
 	}
@@ -80,6 +92,36 @@ func Start(t testing.TB) *Env {
 }
 
 func start(ctx context.Context) (*Env, error) {
+	if admin := os.Getenv("TESTDB_ADMIN_URL"); admin != "" {
+		return startShared(ctx, admin)
+	}
+	return startContainer(ctx)
+}
+
+// startShared creates a throwaway database on an existing Postgres. It is copied from the
+// "dental" database that db/init creates, so it has the same grants and extensions.
+func startShared(ctx context.Context, adminURL string) (*Env, error) {
+	conn, err := pgx.Connect(ctx, adminURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect TESTDB_ADMIN_URL: %w", err)
+	}
+	defer conn.Close(ctx)
+	name := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := conn.Exec(ctx, "CREATE DATABASE "+name+" TEMPLATE dental OWNER dental_owner"); err != nil {
+		return nil, fmt.Errorf("create test database: %w", err)
+	}
+	dropDB = func() {
+		ctx := context.Background()
+		if c, err := pgx.Connect(ctx, adminURL); err == nil {
+			_, _ = c.Exec(ctx, "DROP DATABASE IF EXISTS "+name+" WITH (FORCE)")
+			_ = c.Close(ctx)
+		}
+	}
+	cfg := conn.Config()
+	return finish(ctx, cfg.Host, fmt.Sprint(cfg.Port), name)
+}
+
+func startContainer(ctx context.Context) (*Env, error) {
 	_, file, _, _ := runtime.Caller(0)
 	initScript := filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "db", "init", "01-roles.sql")
 
@@ -102,16 +144,23 @@ func start(ctx context.Context) (*Env, error) {
 	if err != nil {
 		return nil, err
 	}
+	return finish(ctx, host, port.Port(), "dental")
+}
+
+// finish migrates the database as the owner and opens the app-role pool.
+func finish(ctx context.Context, host, port, dbname string) (*Env, error) {
 	url := func(role string) string {
-		return fmt.Sprintf("postgres://%s:%s@%s:%s/dental?sslmode=disable", role, role, host, port.Port())
+		return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", role, role, host, port, dbname)
 	}
 	env := &Env{AppURL: url("dental_app"), OwnerURL: url("dental_owner")}
 	if err := migrations.Run(ctx, env.OwnerURL, "up"); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	if env.Pool, err = db.Open(ctx, env.AppURL); err != nil {
+	pool, err := db.Open(ctx, env.AppURL)
+	if err != nil {
 		return nil, err
 	}
+	env.Pool = pool
 	return env, nil
 }
 

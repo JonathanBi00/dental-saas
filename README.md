@@ -36,13 +36,34 @@ From the repo root:
 
 ```bash
 cp .env.example .env   # local settings; the defaults work as-is
-task up                # start Postgres, file storage and Mailpit in Docker
+task up                # start Postgres (dev and test), file storage and Mailpit in Docker
 task migrate           # create the database tables
 task seed              # add demo data (safe to run again)
 task dev               # start the API and the web app; Ctrl+C stops both
 ```
 
 The first `task dev` installs the web app's packages, so it takes a minute.
+
+#### Using Docker on another machine instead
+
+You can run the Docker services on a server (for example a home lab) and keep Go and Node on your own PC. On the server, clone the repo and run `docker compose up -d --wait`. Add a `docker-compose.override.yml` that publishes the ports on `127.0.0.1` only, so they aren't open to your network:
+
+```yaml
+services:
+  postgres:      { ports: !override ["127.0.0.1:5433:5432"] }
+  postgres-test: { ports: !override ["127.0.0.1:5434:5432"] }
+  objectstore:   { ports: !override ["127.0.0.1:8333:8333", "127.0.0.1:9333:9333"] }
+  mailpit:       { ports: !override ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"] }
+```
+
+Then, on your PC, skip `task up` and open an SSH tunnel in a separate terminal. Leave it running while you work:
+
+```bash
+ssh -N -L 5433:127.0.0.1:5433 -L 5434:127.0.0.1:5434 -L 1025:127.0.0.1:1025 -L 8025:127.0.0.1:8025 \
+       -L 8333:127.0.0.1:8333 -L 9333:127.0.0.1:9333 you@your-server
+```
+
+The services then appear on `localhost` as usual, so `.env.example` works unchanged and every `task` command behaves as described, including `task test`.
 
 ### 3. Try it
 
@@ -80,9 +101,11 @@ Sign in as `frontdesk@demo.local` instead and the list only contains Parramatta.
 ### 4. Run the tests and checks
 
 ```bash
-task test   # backend tests (each package starts its own throwaway Postgres in Docker), then web app tests (Vitest)
+task test   # backend tests, then web app tests (Vitest)
 task lint   # Go formatting, go vet, and ESLint for the web app
 ```
+
+Backend tests run against the `postgres-test` service (port 5434), which keeps its data in memory. Each test package creates its own database there and drops it when it finishes, so tests never touch your dev data. This comes from `TESTDB_ADMIN_URL` in `.env`. If you remove that line, or run `go test` directly without it, each package starts its own Postgres with testcontainers instead, which needs Docker running on your machine.
 
 ### Stopping
 
