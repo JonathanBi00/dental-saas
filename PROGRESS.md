@@ -1,23 +1,22 @@
 # Progress: where we're at
 
-_Last updated: 2026-11-17_
+_Last updated: 2026-11-20_
 
 ## TL;DR
 
 - We're building a multi-tenant dental practice management SaaS for Australian practices.
 - We build the practice-management logic ourselves (patients, appointments, billing, etc.) instead of calling a third-party practice-management API like Dental4Web.
 - We follow **[OpenSpec](https://openspec.dev/)**: **propose → review → apply → archive**. Every piece of work starts as a change in `openspec/changes/`.
-- The first change is **`add-platform-foundation`** (Phase 0). Its tasks are **40 of 42 complete**: groups 1–7 and 8.1.
-- The frontend (group 7) is done: sign-in, password reset, invitations, the app shell and the Settings screens, verified with Vitest and by hand against the dev stack. Remaining: 8.2 (README check from a clean clone) and 8.3 (end-to-end check).
+- The first change is **`add-platform-foundation`** (Phase 0). **All 42 tasks are complete and the change was archived on 2026-11-20**; its specs are now the main specs in `openspec/specs/`.
+- The frontend (group 7) is done: sign-in, password reset, invitations, the app shell and the Settings screens, verified with Vitest and by hand against the dev stack. The README and end-to-end check (8.2, 8.3) were verified on 2026-11-20 against Docker running on the home-lab server.
 - Delivery is **MVP first**: ship a thin working version, and list extras as follow-ups.
 
 ## Read these first (in order)
 
 1. `openspec/config.yaml`: project context and rules that every proposal must follow.
-2. `openspec/changes/add-platform-foundation/proposal.md`: what Phase 0 delivers and why.
-3. `openspec/changes/add-platform-foundation/design.md`: technical decisions (D1–D13) with reasoning.
-4. `openspec/changes/add-platform-foundation/tasks.md`: the checklist. **This is the source of truth for progress.**
-5. `openspec/changes/add-platform-foundation/specs/*/spec.md`: the behaviour each area must have, written as testable scenarios.
+2. `openspec/specs/*/spec.md`: how the system behaves today (tenancy, user-auth, access-control, audit-log, api-conventions), written as testable scenarios.
+3. `openspec/changes/archive/2026-11-20-add-platform-foundation/`: Phase 0's proposal, design decisions (D1–D13 in `design.md`) and completed task list.
+4. `openspec/changes/`: active changes. Each one's `tasks.md` is the source of truth for its progress.
 
 ## Stack
 
@@ -27,7 +26,7 @@ _Last updated: 2026-11-17_
 | API contract | `api/openapi.yaml` is the source of truth. Go server code is generated with oapi-codegen. |
 | Frontend | React 19 + Vite + TypeScript, TanStack Query/Router, Tailwind v4 + shadcn/ui, React Hook Form + Zod, openapi-fetch; Vitest + Testing Library |
 | Database | PostgreSQL 17. Practices are kept apart by **row-level security** inside the database. |
-| Local services | Docker Compose: Postgres, SeaweedFS (S3-compatible storage), Mailpit (catches outgoing email) |
+| Local services | Docker Compose: Postgres (dev, plus an in-memory one for tests), SeaweedFS (S3-compatible storage), Mailpit (catches outgoing email). Can run on another machine through an SSH tunnel; see the README. |
 
 ## Get running (about 5 minutes)
 
@@ -57,7 +56,7 @@ Other commands: `task gen` (regenerate sqlc, oapi-codegen and TypeScript types),
     localhost:8080/api/v1/auth/login
   curl -b cj.txt localhost:8080/api/v1/locations
   ```
-- **Tests** (need Docker; each package starts its own throwaway Postgres): `task test`
+- **Tests:** `task test`. Backend tests use the `postgres-test` service (port 5434) via `TESTDB_ADMIN_URL` in `.env`; without it they fall back to testcontainers.
 
 ## Gotchas
 
@@ -82,9 +81,9 @@ Other commands: `task gen` (regenerate sqlc, oapi-codegen and TypeScript types),
 | **5. Roles and permissions** | ✅ Done. |
 | **6. Audit log** | ✅ Done. |
 | **7. Frontend** | ✅ Done. Typed client with 401 → sign in; sign-in, forgot/reset password and accept-invite screens; app shell with organisation/location switchers and permission-gated nav; Settings → Locations, Users and Audit log. Vitest covers validation, the 401 redirect and hidden admin nav; every screen was checked by hand against the dev stack. MVP follow-ups: lists load at most 200 rows with no paging, audit filters aren't kept in the URL, and the settings screens have no Vitest tests yet. |
-| **8. Seed, docs, end-to-end check** | 🟡 Seed works and is safe to re-run. Proper README and end-to-end check not done. |
+| **8. Seed, docs, end-to-end check** | ✅ Done. README followed from a clean clone; end-to-end flow (owner creates a location, invites a Parramatta-only front desk user who onboards via Mailpit and sees only Parramatta with no admin access); `task test` and `task lint` pass. All against the home-lab server. |
 
-**Next step:** follow the README from a clean clone (8.2), then run the end-to-end check (8.3).
+**Next step:** propose Phase 1. Follow-ups for later environments: move database passwords out of `db/init/01-roles.sql` into per-environment settings, add per-environment `.env` files, and package the app as containers for staging.
 
 ## How the code is organised
 
