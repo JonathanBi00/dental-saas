@@ -158,7 +158,7 @@ Before writing code, read the rules in [`PROGRESS.md`](PROGRESS.md#rules-to-foll
 4. **Every change to practice data writes an audit entry** in the same transaction.
 5. **Check permissions by name** (for example `locations:manage`) inside the service, never by role.
 
-New work starts as an OpenSpec change in `openspec/changes/`: propose, review, implement, then archive. Each change has one owner, one branch and one PR, and is archived as the last commit of that PR. For working in parallel, dependent changes and breaking changes, see [How we work with OpenSpec changes](PROGRESS.md#how-we-work-with-openspec-changes).
+New work starts as an OpenSpec change in `openspec/changes/`: propose, review, implement, then archive. Each change has one owner, one branch (named `feat/<change-name>`) and one PR, and is archived as the last commit of that PR. For working in parallel, dependent changes and breaking changes, see [How we work with OpenSpec changes](PROGRESS.md#how-we-work-with-openspec-changes).
 
 ## Troubleshooting
 
