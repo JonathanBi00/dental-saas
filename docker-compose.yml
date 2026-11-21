@@ -18,6 +18,27 @@ services:
       timeout: 3s
       retries: 20
 
+  # Throwaway Postgres for `task test`. Data lives in memory and is lost on restart; each
+  # test package creates its own database here and drops it when done.
+  postgres-test:
+    image: postgres:17-alpine
+    command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dental"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # S3-compatible object storage for documents and imaging (used from Phase 6).
   # MinIO no longer publishes public images, so we use SeaweedFS's S3 gateway.
   objectstore:

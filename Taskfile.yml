@@ -2,6 +2,10 @@
 # Run `task --list` to see everything.
 version: "3"
 
+# Exported to every command (variables already set in the shell win). Used by `task test`
+# for TESTDB_ADMIN_URL; the API reads .env itself.
+dotenv: [".env"]
+
 vars:
   SQLC_IMAGE: sqlc/sqlc:1.30.0
 
@@ -83,7 +87,7 @@ tasks:
       - npm install
 
   test:
-    desc: Run backend tests (needs Docker; each package starts its own Postgres) and frontend tests (Vitest)
+    desc: Run backend tests (against the postgres-test service, or testcontainers if TESTDB_ADMIN_URL is unset) and frontend tests (Vitest)
     deps: [web:install]
     cmds:
       - cd backend && go test ./...

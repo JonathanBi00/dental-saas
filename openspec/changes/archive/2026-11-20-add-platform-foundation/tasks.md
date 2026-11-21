@@ -63,8 +63,8 @@
 ## 8. Seed, docs and end-to-end check
 
 - [x] 8.1 Implement idempotent `dentalctl seed` (Demo Dental, Sydney CBD and Parramatta, `owner@demo.local` with a printed password, plus one front_desk user restricted to Parramatta); verify running it twice creates no duplicates
-- [ ] 8.2 Write the root README: prerequisites, `task up`/`migrate`/`seed`/`dev`, URLs (app, API, Mailpit, MinIO), seeded credentials and the module/RLS conventions for new domains; verify by following it from a clean clone
-- [ ] 8.3 End-to-end check: from a clean database run up → migrate → seed → dev, sign in as owner, create a location, invite and onboard a user, sign in as the restricted user and confirm they see only Parramatta and no admin menus; then confirm `task test` and `task lint` pass
+- [x] 8.2 Write the root README: prerequisites, `task up`/`migrate`/`seed`/`dev`, URLs (app, API, Mailpit, MinIO), seeded credentials and the module/RLS conventions for new domains; verify by following it from a clean clone
+- [x] 8.3 End-to-end check: from a clean database run up → migrate → seed → dev, sign in as owner, create a location, invite and onboard a user, sign in as the restricted user and confirm they see only Parramatta and no admin menus; then confirm `task test` and `task lint` pass
 
 ## Workflow follow-up
 
