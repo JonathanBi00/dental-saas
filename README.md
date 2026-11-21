@@ -8,7 +8,7 @@ Practice management software for Australian dental practices, run as one shared 
 > - roles and permissions;
 > - an audit log.
 >
-> No dental features exist yet. Phase 1 (reference data) is next. Nothing is deployed. See [`PROGRESS.md`](PROGRESS.md) for detail and the roadmap.
+> No dental features exist yet. Phase 1 (reference data) is next, and nothing is deployed. See [Status and roadmap](#status-and-roadmap).
 
 ## How it fits together
 
@@ -43,6 +43,7 @@ Sign-in uses server-side sessions in an HttpOnly cookie, not JWTs, so deactivati
 - [Node.js](https://nodejs.org/) 22+
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/), running
 - [Task](https://taskfile.dev/installation/): `winget install Task.Task` on Windows, or `brew install go-task` on macOS
+- The [OpenSpec](https://openspec.dev/) CLI, for planning changes: `npm i -g @fission-ai/openspec`
 
 ```bash
 cp .env.example .env   # the defaults work as-is
@@ -56,7 +57,14 @@ Open http://localhost:5173 and sign in with password `demo-password-123`:
 - **`owner@demo.local`** can do everything.
 - **`frontdesk@demo.local`** is limited to the Parramatta clinic and sees no Settings.
 
-Invitation and reset emails land in Mailpit at http://localhost:8025. The API's own contract is served at http://localhost:8080/api/v1/openapi.yaml.
+Invitation and reset emails land in Mailpit at http://localhost:8025. The API's own contract is served at http://localhost:8080/api/v1/openapi.yaml, and its health check at `/healthz`. To check the API directly:
+
+```bash
+curl -c cookies.txt -H 'Content-Type: application/json' \
+  -d '{"email":"owner@demo.local","password":"demo-password-123"}' \
+  http://localhost:8080/api/v1/auth/login
+curl -b cookies.txt http://localhost:8080/api/v1/locations   # front desk would see only Parramatta
+```
 
 <details>
 <summary>Running the Docker services on another machine (for example a home lab)</summary>
@@ -113,6 +121,41 @@ db/init/                creates the three database roles
 openspec/               specs for how the system behaves, and changes in progress
 ```
 
+## Status and roadmap
+
+Each phase is one or more OpenSpec changes. Delivery is MVP first: ship a thin working version, and list extras as follow-ups.
+
+| Phase | Covers | State |
+|---|---|---|
+| 0 | Foundation: practices, clinics, sign-in, roles, audit log | Done, archived 2026-11-20 |
+| 1 | Reference data: practitioners, procedure codes, appointment books | Proposed (`add-reference-data`) |
+| 2 | Patients | Proposed (`add-patients`) |
+| 3 | Scheduling and finding free appointment slots | |
+| 4 | Clinical: charting, treatment plans, notes | |
+| 5 | Billing: invoices, payments, balances, health funds | |
+| 6 | Files and imaging | |
+| 7 | Public API for outside integrators, plus FHIR | |
+
+Later: claims through HICAPS and Medicare, SMS reminders, online booking.
+
+**Before any real patient data:** multi-factor authentication must be added.
+
+**Known gaps from Phase 0:**
+- Lists load at most 200 rows with no paging.
+- Audit log filters aren't kept in the URL.
+- The settings screens have no Vitest tests yet.
+
+**Needed before staging:**
+- Move database passwords out of `db/init/01-roles.sql` into per-environment settings.
+- Add per-environment `.env` files.
+- Package the app as containers.
+
+**To understand the system, read:**
+1. `openspec/config.yaml`: the project context and the rules every proposal follows.
+2. `openspec/specs/*/spec.md`: how the system behaves today, as testable scenarios.
+3. `openspec/changes/archive/2026-11-20-add-platform-foundation/design.md`: Phase 0's technical decisions (D1–D13) and why.
+4. `openspec/changes/`: changes in progress. Each change's `tasks.md` is the source of truth for its progress.
+
 ## Adding a feature
 
 Every feature touches the same five or six files, in this order:
@@ -124,12 +167,70 @@ Every feature touches the same five or six files, in this order:
 6. **Service:** `access.Require` first, then validation, then `db.InTenantTx`, with `audit.Record` in the same transaction.
 7. **Screen:** add a route under `src/routes/_app/` using `useQuery` and `useMutation`, gated by permission.
 
-Each change has one owner, one branch (`feat/<change-name>`) and one PR, and is archived as the last commit of that PR. The full rules, including dependent and breaking changes, are in [`PROGRESS.md`](PROGRESS.md#how-we-work-with-openspec-changes).
+### Rules for code
 
-## Troubleshooting
+1. **Every query goes through `db.InTenantTx` or `db.InAuthTx`.** They tell Postgres which practice and user the transaction belongs to, so row-level security applies. The raw connection pool isn't exported, on purpose.
+2. **Every table with an `org_id` needs `ENABLE` and `FORCE ROW LEVEL SECURITY` and a policy.** `TestRLSGuard` fails if one is missing.
+3. **Every change to practice data writes an audit entry** with `audit.Record(ctx, tx, …)`, in the same transaction as the change.
+4. **Check permissions by name** (`access.Require(ctx, access.PermX)`), never by role, inside the service rather than the handler.
+5. **New endpoints start in `api/openapi.yaml`**, then you run `task gen`.
+6. **Data conventions:**
+   - UUIDv7 ids, from `ids.New()`;
+   - money as whole cents;
+   - timestamps stored and returned in UTC;
+   - soft deletes, so rows are archived rather than removed;
+   - clinical records are never edited in place, and corrections are added as amendments.
+
+### Working together with OpenSpec
+
+These rules let several people work at once without fighting over the same files.
+
+**One change per piece of work**
+1. **Each change has one owner, one branch and one PR.** Name the branch `feat/<change-name>`. Start a new change for each feature rather than adding to someone else's.
+2. **Keep changes small**, days not weeks. The longer a change stays open, the more likely it clashes with another.
+3. **Only a change's owner ticks its `tasks.md`.** If two people really must share a change, each takes whole task sections.
+4. **Never edit `openspec/specs/` by hand.** A change describes what it adds or alters in its own `specs/` folder, as `ADDED`, `MODIFIED` or `REMOVED` requirements. Archiving merges them in.
+
+**Archiving**
+
+5. **Archive as the last commit of the change's PR**, with `openspec archive <name>`. Code and specs then land together.
+6. **If a change spans several PRs**, archive it in the last one.
+7. **If your archive conflicts with one already merged**, rebase and fix your own delta.
+
+**Changes that depend on each other**
+
+8. **Agree and merge the spec before the code.** Once the contract is settled, the code can be written in parallel.
+9. **When change B builds on change A:**
+   - merge A's spec first;
+   - branch B from A, or from `main` once A's spec is in;
+   - write "Depends on: `<A>`" in B's `proposal.md`;
+   - archive A before B.
+10. **When two changes need a shared interface**, such as an API shape or a table, put just that interface in a small change. Merge it first, then build both against it.
+11. **If you keep editing each other's requirements, it's one change.** Give it one owner and split the work by task section.
+
+**Breaking changes** (a `MODIFIED` or `REMOVED` delta on an existing spec)
+
+12. **Say what breaks in `proposal.md`:** what changes, who's affected and how to migrate. Put the data migration and rollout order in `design.md`.
+13. **Expand, then contract:**
+    - first, ADD the new behaviour beside the old;
+    - then move the callers over;
+    - remove the old behaviour in a later change.
+14. **Before archiving, check who else touches that capability.** Run `openspec list` and look in `openspec/changes/*/specs/<capability>/`, then tell those owners, because they'll need to rebase.
+
+## Troubleshooting and gotchas
 
 - **Postgres is on port 5433**, not 5432, to avoid clashing with a local install.
 - **`task` not found after installing it:** open a new terminal.
 - **Docker errors mentioning `dockerDesktopLinuxEngine`:** start Docker Desktop.
 - **Port 5173 or 8080 in use:** an earlier `task dev` is still running. Stop it, or end the leftover `node` or `dentalctl` process.
 - **Type errors after changing the API:** run `task gen`.
+- **sqlc runs in Docker**, because its parser doesn't build on Windows without a C compiler. `task gen` handles this.
+- **Generated files:**
+  - `backend/internal/api/openapi.yaml` is a copy of `api/openapi.yaml` that the API serves. `task gen` refreshes it.
+  - `frontend/src/routeTree.gen.ts` is regenerated whenever Vite runs. Commit it, but don't edit it.
+- **TypeScript is pinned to 5.9**, because `openapi-typescript` doesn't support TypeScript 6 yet.
+- **Test containers:**
+  - Ryuk, testcontainers' cleanup container, is disabled because it won't start on Docker Desktop for Windows. Each test package calls `testdb.Main(m)` in `TestMain` to remove its own container.
+  - Tests use the `postgres-test` service through `TESTDB_ADMIN_URL` in `.env`, and fall back to testcontainers without it.
+- **SeaweedFS replaced MinIO**, which no longer publishes public Docker images.
+- **The OpenSpec slash commands** (`/openspec-propose`, `/openspec-apply-change`, …) live in `.claude/skills/`. Start Claude Code from the repo root to get them.
