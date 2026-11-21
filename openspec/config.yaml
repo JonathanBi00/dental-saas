@@ -34,6 +34,21 @@ rules:
   tasks:
     - Every task that adds an endpoint includes updating api/openapi.yaml first
     - Include tests for tenant isolation on any new tenant-owned table
+  proposal:
+    - If this change depends on another open change, say so on a "Depends on:" line naming that change
+    - If any delta MODIFIES or REMOVES an existing requirement in openspec/specs/, state what breaks, who is affected and how to migrate
+    - Prefer expand/contract for breaking changes; ADD the new behaviour first and REMOVE the old in a later change
+
+operations:
+  apply:
+    guidance:
+      - Only tick tasks in this change's own tasks.md; never edit another change's files
+      - Never edit openspec/specs/ directly; spec changes go in this change's delta specs
+  archive:
+    guidance:
+      - Archive as the final commit of the change's PR, before merge (or in the last PR if the change spans several)
+      - Before archiving, list other open changes with deltas against the same capabilities and report any that MODIFY or REMOVE the same requirements
+      - Archive changes that others depend on before the changes that depend on them
 
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.

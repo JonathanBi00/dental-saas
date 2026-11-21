@@ -16,7 +16,7 @@ _Last updated: 2026-11-20_
 1. `openspec/config.yaml`: project context and rules that every proposal must follow.
 2. `openspec/specs/*/spec.md`: how the system behaves today (tenancy, user-auth, access-control, audit-log, api-conventions), written as testable scenarios.
 3. `openspec/changes/archive/2026-11-20-add-platform-foundation/`: Phase 0's proposal, design decisions (D1–D13 in `design.md`) and completed task list.
-4. `openspec/changes/`: active changes. Each one's `tasks.md` is the source of truth for its progress.
+4. `openspec/changes/`: active changes. Each one's `tasks.md` is the source of truth for its progress, and only that change's owner ticks it (see [How we work with OpenSpec changes](#how-we-work-with-openspec-changes)).
 
 ## Stack
 
@@ -121,6 +121,36 @@ backend/
    - timestamps stored and returned in UTC;
    - soft deletes (mark rows deleted rather than removing them);
    - clinical records are never edited in place: corrections are added as amendments.
+
+## How we work with OpenSpec changes
+
+These rules let several people work at the same time without fighting over the same files.
+
+**One change per piece of work**
+1. **Each change has one owner, one branch and one PR.** Make a new change (`/openspec-propose`) for each feature rather than adding to someone else's.
+2. **Keep changes small.** A change should take days, not weeks. The longer it stays open, the more likely it clashes with another change.
+3. **Only the owner ticks a change's `tasks.md`.** If two people really have to share a change, each takes whole task sections and ticks only their own.
+4. **Never edit `openspec/specs/` by hand.** Changes describe what they add or alter in their own `specs/` folder (`ADDED`, `MODIFIED` or `REMOVED Requirements`). `openspec archive` merges those into `openspec/specs/`.
+
+**Archiving**
+5. **Archive in the same PR, as the last commit before merging**: `openspec archive <name>` (or `/openspec-archive-change`). Then the code and `openspec/specs/` land together and main always describes what's actually built.
+6. **If a change is delivered over several PRs**, leave it open and archive it in the last PR.
+7. **If archiving conflicts with a change someone else has already archived**, rebase and fix your delta in your own PR.
+
+**Changes that depend on each other**
+8. **Agree the spec first, and merge it before the code.** Reviewing a proposal and its delta specs is quick, and once the contract is settled, the code behind it can be written in parallel.
+9. **When change B builds on change A:** merge A's spec first, branch B from A (or from main once A's spec is in), write "Depends on: `<A>`" in B's `proposal.md`, and archive A before B.
+10. **When two changes need a shared interface** (an API shape, a table, an event): make a small change containing only that interface, merge and archive it, then build both changes against it.
+11. **If you keep needing to edit each other's requirements, it's one change.** Merge them under one owner and split the work by task section.
+
+**Breaking changes** (a `MODIFIED` or `REMOVED` delta on something already in `openspec/specs/`)
+
+12. **Say what breaks in `proposal.md`**: what changes, who's affected and how to migrate. Put the data migration and rollout order in `design.md`.
+13. **Add the new behaviour before removing the old** (expand, then contract):
+    - first, a change that ADDs the new behaviour alongside the old;
+    - then move the callers over;
+    - then a later change that REMOVEs the old behaviour.
+14. **Before archiving, check who else is touching that capability** (`openspec list`, and look in `openspec/changes/*/specs/<capability>/`). Tell those owners, because they'll need to rebase.
 
 ## Product roadmap (each phase = one or more OpenSpec changes)
 
