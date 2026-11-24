@@ -186,7 +186,7 @@ Every feature touches the same five or six files, in this order:
 These rules let several people work at once without fighting over the same files.
 
 **One change per piece of work**
-1. **Each change has one owner, one branch and one PR.** Name the branch `feat/<change-name>`. Start a new change for each feature rather than adding to someone else's.
+1. **Each change has one owner, one branch and one PR.** Name the branch `feat/<change-name>`, for example `feat/add-patients` for `openspec/changes/add-patients/`. Start a new change for each feature rather than adding to someone else's.
 2. **Keep changes small**, days not weeks. The longer a change stays open, the more likely it clashes with another.
 3. **Only a change's owner ticks its `tasks.md`.** If two people really must share a change, each takes whole task sections.
 4. **Never edit `openspec/specs/` by hand.** A change describes what it adds or alters in its own `specs/` folder, as `ADDED`, `MODIFIED` or `REMOVED` requirements. Archiving merges them in.
