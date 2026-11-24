@@ -127,7 +127,7 @@ backend/
 These rules let several people work at the same time without fighting over the same files.
 
 **One change per piece of work**
-1. **Each change has one owner, one branch and one PR.** Make a new change (`/openspec-propose`) for each feature rather than adding to someone else's.
+1. **Each change has one owner, one branch and one PR.** Make a new change (`/openspec-propose`) for each feature rather than adding to someone else's. Name the branch `feat/<change-name>`, for example `feat/add-patients` for `openspec/changes/add-patients/`.
 2. **Keep changes small.** A change should take days, not weeks. The longer it stays open, the more likely it clashes with another change.
 3. **Only the owner ticks a change's `tasks.md`.** If two people really have to share a change, each takes whole task sections and ticks only their own.
 4. **Never edit `openspec/specs/` by hand.** Changes describe what they add or alter in their own `specs/` folder (`ADDED`, `MODIFIED` or `REMOVED Requirements`). `openspec archive` merges those into `openspec/specs/`.
