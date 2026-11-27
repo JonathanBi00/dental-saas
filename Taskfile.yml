@@ -94,9 +94,20 @@ tasks:
       - cd frontend && npm test
 
   lint:
-    desc: Check Go formatting, go vet and the frontend ESLint rules
+    desc: Check Go formatting, go vet, golangci-lint (if installed) and the frontend ESLint rules
     deps: [web:install]
     cmds:
       - test -z "$(gofmt -l backend)" || (echo "gofmt needed on:"; gofmt -l backend; exit 1)
       - cd backend && go vet ./...
+      - |
+        if command -v golangci-lint >/dev/null; then
+          cd backend && golangci-lint run ./...
+        else
+          echo "golangci-lint not installed; skipping (CI runs it). See README > CI."
+        fi
       - cd frontend && npm run lint
+
+  smoke:
+    desc: "End-to-end check: migrate up/reset/up, seed twice, start the API and sign in (RESETS the dev database)"
+    cmds:
+      - ./scripts/smoke.sh

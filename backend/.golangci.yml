@@ -1,0 +1,39 @@
+# golangci-lint v2. Run with `task lint` or `golangci-lint run ./...` from backend/.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - gosec
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gosec:
+      excludes:
+        - G104 # unchecked errors: errcheck already covers this
+        - G115 # int conversions: values are bounded (page limits, argon2 key length)
+        - G124 # session cookie sets Secure from APP_ORIGIN so plain-http local dev works
+        - G304 # config reads a fixed .env path, not user input
+  exclusions:
+    generated: strict
+    presets:
+      - std-error-handling # unchecked Close, Setenv and friends
+    rules:
+      - path: _test\.go
+        linters: [errcheck, gosec, noctx]
+
+formatters:
+  enable:
+    - gofmt
