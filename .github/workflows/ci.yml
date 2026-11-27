@@ -1,0 +1,217 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOLANGCI_LINT_VERSION: v2.15.0
+  GOVULNCHECK_VERSION: v1.10.0
+  OPENSPEC_VERSION: 1.7.0
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.30.1
+
+jobs:
+  backend-lint:
+    name: Backend lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: go mod tidy is clean
+        working-directory: backend
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: go vet
+        working-directory: backend
+        run: go vet ./...
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: backend
+
+  backend-test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Same throwaway Postgres as `task test`, so CI and local runs behave alike.
+      TESTDB_ADMIN_URL: postgres://postgres:postgres@localhost:5434/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Start test Postgres
+        run: docker compose up -d --wait postgres-test
+      - name: go test (race detector, coverage)
+        working-directory: backend
+        run: go test -race -count=1 -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        if: always() && hashFiles('backend/coverage.out') != ''
+        working-directory: backend
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+          {
+            echo "### Backend coverage: ${total}"
+            echo
+            echo '<details><summary>Per package</summary>'
+            echo
+            echo '```'
+            go tool cover -func=coverage.out | awk '{split($1,a,":"); sub(/\/[^\/]+$/,"",a[1]); pkg[a[1]]+=$3; n[a[1]]++} END {for (p in pkg) printf "%-50s %5.1f%%\n", p, pkg[p]/n[p]}' | sort
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && hashFiles('backend/coverage.out') != ''
+        with:
+          name: backend-coverage
+          path: backend/coverage.out
+          retention-days: 14
+      - name: Postgres logs on failure
+        if: failure()
+        run: docker compose logs postgres-test
+
+  govulncheck:
+    name: Go vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: govulncheck
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} ./...
+
+  codegen:
+    name: Generated code is up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: task gen
+        run: task gen
+      - name: Fail if anything changed
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated code is stale. Run 'task gen' and commit the result."
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: ESLint
+        run: npm run lint -- --max-warnings=0
+      - name: Typecheck and build
+        run: npm run build
+      - name: Vitest
+        run: npm test
+      - name: npm audit (runtime dependencies, high and above)
+        run: npm audit --omit=dev --audit-level=high
+
+  smoke:
+    name: Migrations and API smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Start Postgres and Mailpit
+        run: docker compose up -d --wait postgres mailpit
+      - name: scripts/smoke.sh
+        env:
+          SMOKE_LOG: ${{ runner.temp }}/api.log
+        run: ./scripts/smoke.sh
+      - name: API and Postgres logs on failure
+        if: failure()
+        run: |
+          cat "${{ runner.temp }}/api.log" || true
+          docker compose logs postgres
+
+  openspec:
+    name: OpenSpec validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm install -g "@fission-ai/openspec@${OPENSPEC_VERSION}"
+      - run: openspec validate --all --strict --no-interactive
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: gitleaks (full history)
+        run: docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" git /repo --redact --verbose
+
+  # Single required check for branch protection: passes only when every job above passed.
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: [backend-lint, backend-test, govulncheck, codegen, frontend, smoke, openspec, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = success ] || { echo "::error::A required job did not succeed ($r)"; exit 1; }
+          done

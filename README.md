@@ -97,7 +97,27 @@ ssh -N -L 5433:127.0.0.1:5433 -L 5434:127.0.0.1:5434 -L 1025:127.0.0.1:1025 -L 8
 | `task dev` | Run the API and the web app |
 | `task gen` | Regenerate code after changing `api/openapi.yaml` or `backend/queries/*.sql` |
 | `task test` | Go tests against a throwaway test database on :5434, then Vitest |
-| `task lint` | Go formatting, `go vet` and ESLint |
+| `task lint` | Go formatting, `go vet`, golangci-lint (if installed) and ESLint |
+| `task smoke` | End-to-end check: migrations up, down and up, seed twice, start the API and sign in. Resets the dev database |
+
+## CI
+
+Every pull request and every push to `main` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The `CI passed` job only goes green when all of these do, so it's the one check to require in branch protection.
+
+| Job | What it checks |
+|---|---|
+| Backend lint | `go mod tidy` leaves nothing to commit, `go vet`, golangci-lint (config in `backend/.golangci.yml`) |
+| Backend tests | `go test -race -shuffle=on` against the `postgres-test` service, with a coverage summary on the run page |
+| Go vulnerabilities | `govulncheck` on the code and the Go toolchain pinned in `go.mod` |
+| Generated code | `task gen` changes nothing, so sqlc, oapi-codegen and openapi-typescript output is committed and current |
+| Frontend | ESLint with no warnings, `tsc` + Vite build, Vitest, `npm audit` on runtime dependencies |
+| Migrations and smoke test | `scripts/smoke.sh`: migrations up, fully down and up again, seed twice, then sign in and check location scoping, 401s and the cross-origin block |
+| OpenSpec | `openspec validate --all --strict` |
+| Secret scan | gitleaks over the full git history |
+
+Also: CodeQL (Go, TypeScript and the workflows themselves) on every PR and weekly, dependency review on PRs (blocks high-severity vulnerabilities and GPL/AGPL licences), and Dependabot for Go, npm, Actions and Docker images. Actions are pinned to commit SHAs; Dependabot bumps them.
+
+To run the lint locally, install golangci-lint v2 (`brew install golangci-lint`, or `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0`); `task lint` picks it up.
 
 ## Repo layout
 
@@ -118,6 +138,8 @@ frontend/src/
   lib/                  session, query setup (401 → sign in), form rules
   components/           shadcn/ui blocks and the app shell
 db/init/                creates the three database roles
+scripts/smoke.sh        end-to-end smoke test used by CI (`task smoke`)
+.github/                CI, CodeQL, dependency review and Dependabot
 openspec/               specs for how the system behaves, and changes in progress
 ```
 
