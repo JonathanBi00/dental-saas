@@ -15,11 +15,23 @@ export SMTP_HOST="${SMTP_HOST:-localhost}" SMTP_PORT="${SMTP_PORT:-1025}"
 export MAIL_FROM="${MAIL_FROM:-Dental SaaS <no-reply@dental.local>}"
 
 api="http://${HTTP_ADDR}"
-bin="$(mktemp -d)/dentalctl"
-jar="$(mktemp)"
+work="$(mktemp -d)"
+bin="$work/dentalctl"
+jar="$work/cookies.txt"
+log="${SMOKE_LOG:-$work/api.log}"
+pid=""
+cleanup() {
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null && wait "$pid" 2>/dev/null
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
 
 step() { printf '\n==> %s\n' "$*"; }
-fail() { echo "FAIL: $*" >&2; exit 1; }
+fail() {
+  echo "FAIL: $*" >&2
+  [ -s "$log" ] && { echo "--- API log (last 50 lines) ---" >&2; tail -n 50 "$log" >&2; }
+  exit 1
+}
 
 step "build"
 go build -o "$bin" ./cmd/dentalctl
@@ -35,16 +47,16 @@ step "seed twice"
 "$bin" seed
 
 step "serve"
-"$bin" serve >"${SMOKE_LOG:-/dev/null}" 2>&1 &
+"$bin" serve >"$log" 2>&1 &
 pid=$!
-trap 'kill "$pid" 2>/dev/null || true' EXIT
 for _ in $(seq 1 50); do
   curl -fsS "$api/healthz" >/dev/null 2>&1 && break
   kill -0 "$pid" 2>/dev/null || fail "API exited during startup"
   sleep 0.2
 done
 curl -fsS "$api/healthz" >/dev/null || fail "/healthz never became healthy"
-curl -fsS "$api/api/v1/openapi.yaml" | grep -q '^openapi:' || fail "OpenAPI spec not served"
+spec=$(curl -fsS "$api/api/v1/openapi.yaml") || fail "OpenAPI spec not served"
+grep -q '^openapi:' <<<"$spec" || fail "OpenAPI spec looks wrong"
 
 # login EMAIL: signs in and stores the session cookie in $jar
 login() {
