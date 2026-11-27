@@ -141,6 +141,8 @@ db/init/                creates the three database roles
 scripts/smoke.sh        end-to-end smoke test used by CI (`task smoke`)
 .github/                CI, CodeQL, dependency review and Dependabot
 openspec/               specs for how the system behaves, and changes in progress
+CHANGELOG.md            notable changes; every PR adds a line under Unreleased
+CLAUDE.md               instructions for Claude Code (commands, non-negotiables, gotchas)
 ```
 
 ## Status and roadmap
@@ -209,35 +211,36 @@ These rules let several people work at once without fighting over the same files
 
 **One change per piece of work**
 1. **Each change has one owner, one branch and one PR.** Name the branch `feat/<change-name>`, for example `feat/add-patients` for `openspec/changes/add-patients/`. Start a new change for each feature rather than adding to someone else's.
-2. **Keep changes small**, days not weeks. The longer a change stays open, the more likely it clashes with another.
-3. **Only a change's owner ticks its `tasks.md`.** If two people really must share a change, each takes whole task sections.
-4. **Never edit `openspec/specs/` by hand.** A change describes what it adds or alters in its own `specs/` folder, as `ADDED`, `MODIFIED` or `REMOVED` requirements. Archiving merges them in.
+2. **Add a line to `CHANGELOG.md`** under Unreleased in every PR that changes behaviour, tooling or dependencies.
+3. **Keep changes small**, days not weeks. The longer a change stays open, the more likely it clashes with another.
+4. **Only a change's owner ticks its `tasks.md`.** If two people really must share a change, each takes whole task sections.
+5. **Never edit `openspec/specs/` by hand.** A change describes what it adds or alters in its own `specs/` folder, as `ADDED`, `MODIFIED` or `REMOVED` requirements. Archiving merges them in.
 
 **Archiving**
 
-5. **Archive as the last commit of the change's PR**, with `openspec archive <name>`. Code and specs then land together.
-6. **If a change spans several PRs**, archive it in the last one.
-7. **If your archive conflicts with one already merged**, rebase and fix your own delta.
+6. **Archive as the last commit of the change's PR**, with `openspec archive <name>`. Code and specs then land together.
+7. **If a change spans several PRs**, archive it in the last one.
+8. **If your archive conflicts with one already merged**, rebase and fix your own delta.
 
 **Changes that depend on each other**
 
-8. **Agree and merge the spec before the code.** Once the contract is settled, the code can be written in parallel.
-9. **When change B builds on change A:**
+9. **Agree and merge the spec before the code.** Once the contract is settled, the code can be written in parallel.
+10. **When change B builds on change A:**
    - merge A's spec first;
    - branch B from A, or from `main` once A's spec is in;
    - write "Depends on: `<A>`" in B's `proposal.md`;
    - archive A before B.
-10. **When two changes need a shared interface**, such as an API shape or a table, put just that interface in a small change. Merge it first, then build both against it.
-11. **If you keep editing each other's requirements, it's one change.** Give it one owner and split the work by task section.
+11. **When two changes need a shared interface**, such as an API shape or a table, put just that interface in a small change. Merge it first, then build both against it.
+12. **If you keep editing each other's requirements, it's one change.** Give it one owner and split the work by task section.
 
 **Breaking changes** (a `MODIFIED` or `REMOVED` delta on an existing spec)
 
-12. **Say what breaks in `proposal.md`:** what changes, who's affected and how to migrate. Put the data migration and rollout order in `design.md`.
-13. **Expand, then contract:**
+13. **Say what breaks in `proposal.md`:** what changes, who's affected and how to migrate. Put the data migration and rollout order in `design.md`.
+14. **Expand, then contract:**
     - first, ADD the new behaviour beside the old;
     - then move the callers over;
     - remove the old behaviour in a later change.
-14. **Before archiving, check who else touches that capability.** Run `openspec list` and look in `openspec/changes/*/specs/<capability>/`, then tell those owners, because they'll need to rebase.
+15. **Before archiving, check who else touches that capability.** Run `openspec list` and look in `openspec/changes/*/specs/<capability>/`, then tell those owners, because they'll need to rebase.
 
 ## Troubleshooting and gotchas
 
